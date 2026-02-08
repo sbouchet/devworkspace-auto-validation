@@ -1,0 +1,19 @@
+apiVersion: workspace.devfile.io/v1alpha2
+kind: DevWorkspace
+metadata:
+  name: DEVWORKSPACE_NAME
+  namespace: DEVWORKSPACE_NS
+spec:
+  started: true
+  routingClass: che # thanks claude
+  template:
+    DEVFILE
+    projects:
+      - name: project-sample
+        git:
+          remotes:
+            origin: PROJECT_URL
+
+  contributions:
+    - name: editor-definition-component
+      uri: EDITOR_DEFINITION
