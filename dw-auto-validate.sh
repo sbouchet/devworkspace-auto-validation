@@ -2,27 +2,10 @@
 
 # You must be logged into your OpenShift Cluster
 
-VERBOSE=1
-# Rough time (seconds) to wait for DevWorkspace to enter 'Running' state
-TIMEOUT=60
-
-# name to give all created (singleton) DevWorkspace instances
-DEVWORKSPACE_NAME='sshd-test'
-# user namespace where testing will occur
-DEVWORKSPACE_NS=''
-
-# url of the sample project to use
-PROJECT_URL='"https://github.com/che-samples/web-nodejs-sample.git"'
-# editor definition to be used when testing
-EDITOR_DEFINITION='https://gist.githubusercontent.com/rgrunber/4f40f06f20c0e835bd8274942d6a89ac/raw/309aeece6d46a3784e0df892433fa6e1a05af62b/che-code-sshd-ubi8.yaml'
-
-# URL of sample devfile to use
-DEVFILE_URL='https://raw.githubusercontent.com/RomanNikitenko/web-nodejs-sample/refs/heads/main/devfile.yaml'
-# Temporary storage for devfile
-TMP_DEVFILE=/tmp/devfile-sshd.yaml
+# Read values from settings.env
+. settings.env
 
 # Images to test (override) the given devfile
-#IMAGES_TO_TEST=''
 IMAGES_TO_TEST=$(cat images_to_test.txt | tr '\n' ' ')
 
 # Function that evaluates whether DevWorkspace is valid
