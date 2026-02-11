@@ -4,7 +4,8 @@
 
 ## Requirements
 
-* You must have `oc` installed and be logged into the cluster
+* The command-lie tools : `oc`, `yq`
+* You must be logged into the OpenShift cluster
 
 ### Usage
 

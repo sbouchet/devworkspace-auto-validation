@@ -5,16 +5,25 @@
 # Read values from settings.env
 . settings.env
 
-# Images to test (override) the given devfile
-IMAGES_TO_TEST=$(cat images_to_test.txt | tr '\n' ' ')
+#############
+# Functions #
+#############
 
 # Function that evaluates whether DevWorkspace is valid
 function validate_devworkspace () {
+  devfile_url=$1
   # Get all pods
   podNameAndDWName=$(oc get pods -o 'jsonpath={range .items[*]}{.metadata.name}{","}{.metadata.labels.controller\.devfile\.io/devworkspace_name}{end}')
   # Find pod in ${DEVWORKSPACE_NS} matching ${DEVWORKSPACE_NAME}
   podName=$(echo ${podNameAndDWName} | grep ${DEVWORKSPACE_NAME} | cut -d, -f1)
-  res=$(oc exec -n ${DEVWORKSPACE_NS} ${podName} -c tools -- cat /tmp/sshd.log)
+  # Get the (main) development container
+  mainContainerName=$(getMainContainerFromDevfile ${devfile_url})
+  if [ -z "${podName}" ] || [ -z "${mainContainerName}" ]; then
+    log "Could not find pod/container matching ${DEVWORKSPACE_NAME}"
+    return 1
+  fi
+  log "Found ${mainContainerName} container in ${podName} pod"
+  res=$(oc exec -n ${DEVWORKSPACE_NS} ${podName} -c ${mainContainerName} -- cat /tmp/sshd.log)
   echo "${res}" | grep -q 'listening'
   if [ $? -eq 0 ]; then
     # pass
@@ -25,17 +34,40 @@ function validate_devworkspace () {
   fi
 }
 
-function log () {
-if [ ${VERBOSE} -eq 1 ]; then
-  echo ${@}
-fi
+# Seems to be the first one listed under components
+function getMainContainerFromDevfile () {
+  devfile_url=$1
+  curl -sl ${devfile_url} | yq '.components[0].name'
 }
 
-curl -sL -o ${TMP_DEVFILE} ${DEVFILE_URL}
-sed -i 's/^/    /' ${TMP_DEVFILE}
+function getDevfileURLSFromRegistry () {
+  devfile_registry=$1
 
-for image in ${IMAGES_TO_TEST}; do
-  log "Begin testing ${image}"
+  INDEX_PATH='/index/all'
+  devfileNames=$(curl -sL "${devfile_registry}${INDEX_PATH}" | jq -r '.[].name' -)
+
+  for name in ${devfileNames}; do
+    echo "${devfile_registry}/devfiles/${name}"
+  done
+}
+
+function log () {
+  if [ ${VERBOSE} -eq 1 ]; then
+    echo ${@}
+  fi
+}
+
+
+########
+# Main #
+########
+
+for devfile_url in ${DEVFILE_URL_LIST}; do
+  curl -sL -o ${TMP_DEVFILE} ${devfile_url}
+  sed -i 's/^/    /' ${TMP_DEVFILE}
+
+for image in ${IMAGES_LIST}; do
+  log "Begin testing ${devfile_url} with ${image}"
   # Modify DevWorkspace template
   cat devworkspace-sshd.yaml | \
   sed \
@@ -63,13 +95,15 @@ for image in ${IMAGES_TO_TEST}; do
     log -e "\n${DEVWORKSPACE_NAME} failed to start"
   fi
   log "Validating ${DEVWORKSPACE_NAME} .."
-  validate_devworkspace
+  validate_devworkspace ${devfile_url}
   if [ $? -eq 0 ]; then
-    echo "TEST ${image} PASS"
+    echo "TEST ${devfile_url} ${image} PASS"
   else
-    echo "TEST ${image} FAIL"
+    echo "TEST ${devfile_url} ${image} FAIL"
   fi
   sleep 1s
   oc delete dw ${DEVWORKSPACE_NAME}
   sleep 1s
-done
+done # image loop
+
+done # devfile loop
