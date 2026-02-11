@@ -9,8 +9,10 @@
 
 ### Usage
 
+* Run the script by passing a configuration file as the first argument. This loads various constants specific to that type of test including possible functions.
+
 ```
-$ ./dw-auto-validate.sh
+$ ./dw-auto-validate.sh settings/che-code-sshd.env
 Begin testing registry.access.redhat.com/ubi8:latest
 devworkspace.workspace.devfile.io/sshd-test created
 Waiting for sshd-test .................
@@ -28,4 +30,4 @@ TEST registry.access.redhat.com/ubi8-minimal:latest PASS
 ...
 ```
 
-See `settings.env` for all configurable settings.
+See the files under `settings/` for all configurable settings.

@@ -2,37 +2,9 @@
 
 # You must be logged into your OpenShift Cluster
 
-# Read values from settings.env
-. settings.env
-
-#############
-# Functions #
-#############
-
-# Function that evaluates whether DevWorkspace is valid
-function validate_devworkspace () {
-  devfile_url=$1
-  # Get all pods
-  podNameAndDWName=$(oc get pods -o 'jsonpath={range .items[*]}{.metadata.name}{","}{.metadata.labels.controller\.devfile\.io/devworkspace_name}{end}')
-  # Find pod in ${DEVWORKSPACE_NS} matching ${DEVWORKSPACE_NAME}
-  podName=$(echo ${podNameAndDWName} | grep ${DEVWORKSPACE_NAME} | cut -d, -f1)
-  # Get the (main) development container
-  mainContainerName=$(getMainContainerFromDevfile ${devfile_url})
-  if [ -z "${podName}" ] || [ -z "${mainContainerName}" ]; then
-    log "Could not find pod/container matching ${DEVWORKSPACE_NAME}"
-    return 1
-  fi
-  log "Found ${mainContainerName} container in ${podName} pod"
-  res=$(oc exec -n ${DEVWORKSPACE_NS} ${podName} -c ${mainContainerName} -- cat /tmp/sshd.log)
-  echo "${res}" | grep -q 'listening'
-  if [ $? -eq 0 ]; then
-    # pass
-    return 0
-  else
-    # fail
-    return 1
-  fi
-}
+####################
+# Common Functions #
+####################
 
 # Seems to be the first one listed under components
 function getMainContainerFromDevfile () {
@@ -61,6 +33,15 @@ function log () {
 ########
 # Main #
 ########
+
+if [ -z "$1" ]; then
+  echo "Please make sure to pass in one of the constant files under settings/ as an argument to this script."
+  echo "$ ./dw-auto-validate.sh settings/che-code-sshd.env"
+  exit 1
+fi
+
+SETTINGS=$1
+. ${SETTINGS}
 
 for devfile_url in ${DEVFILE_URL_LIST}; do
   curl -sL -o ${TMP_DEVFILE} ${devfile_url}
