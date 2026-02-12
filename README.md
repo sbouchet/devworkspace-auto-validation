@@ -4,15 +4,16 @@
 
 ## Requirements
 
-* The command-lie tools : `oc`, `yq`
+* The command-line tools : `oc`, `yq`, `jq`
 * You must be logged into the OpenShift cluster
 
 ### Usage
 
-* Run the script by passing a configuration file as the first argument. This loads various constants specific to that type of test including possible functions.
+* Simply run the script. This loads various constants specific to that type of test including possible functions.
+
 
 ```
-$ ./dw-auto-validate.sh settings/che-code-sshd.env
+$ ./dw-auto-validate.sh
 Begin testing registry.access.redhat.com/ubi8:latest
 devworkspace.workspace.devfile.io/sshd-test created
 Waiting for sshd-test .................
