@@ -1,6 +1,7 @@
 #! /bin/bash
 VERBOSE=0
 FULL=0
+DEBUG=0
 
 # colors for fun
 RED='\033[1;91m'
@@ -15,13 +16,29 @@ NC='\033[0m' # No Color
 # Parameters for fun or experts #
 #################################
 
-while getopts "vh" o; do
-    case "${o}" in
-        v) VERBOSE=1 ;;
-        f) FULL=1 ;;
-        h) echo "Help: This script accepts -v for verbose mode, -f for full images test and -h for help." ;;
-        \?) echo "Invalid option: -$OPTARG" ;;
-    esac
+while getopts "vfdh" o; do
+  case "${o}" in
+    v) 
+    VERBOSE=1
+    echo "Using verbose mode."
+    ;;
+    f)
+    FULL=1
+    echo -e "Using full test matrix. ${YELLOW}WARNING${NC} - Can take a long time to complete."
+    ;;
+    d)
+    DEBUG=1
+    FULL=0
+    VERBOSE=1
+    echo -e "Using verbose mode AND do not clean resource. ${YELLOW}WARNING${NC} - This mode uses only the first item of the test matrix."
+    ;;
+    h)
+    echo "Help: This script accepts -v for verbose mode, -d for debug mode and -f for full images test and -h for help."
+    ;;
+    \?)
+    echo "Invalid option: -$OPTARG"
+    ;;
+  esac
 done
 
 # quiet logs from oc
@@ -30,12 +47,6 @@ done
 ####################
 # Common Functions #
 ####################
-
-# Seems to be the first one listed under components
-getMainContainerFromDevfile() {
-  devfile_url=$1
-  curl -sL ${devfile_url} | yq '.components[0].name'
-}
 
 getDevfileURLSFromRegistry() {
   devfile_registry=$1
@@ -50,6 +61,12 @@ getDevfileURLSFromRegistry() {
 
 log() {
   if [ ${VERBOSE} -eq 1 ]; then
+    echo ${@}
+  fi
+}
+
+debug() {
+  if [ ${DEBUG} -eq 1 ]; then
     echo ${@}
   fi
 }
@@ -73,16 +90,6 @@ echo -e "\n${BLUE}Checking jq installation...${NC}"
 log "Executing 'which jq'..."
 if ! [ -x "$(command -v jq)" ]; then
   echo -e "${RED}Error:${NC} jq is not installed. Please install jq package." >&2
-  exit 1
-else
-  echo -e "${GREEN}Ok!${NC}"
-fi
-
-# yq must be installed
-echo -e "\n${BLUE}Checking yq installation...${NC}"
-log "Executing 'which yq'..."
-if ! [ -x "$(command -v yq)" ]; then
-  echo -e "${RED}Error:${NC} yq is not installed. Please install yq package." >&2
   exit 1
 else
   echo -e "${GREEN}Ok!${NC}"
@@ -133,9 +140,9 @@ TMP_DEVFILE=$(mktemp -t devfile-${SCENARIO}-XXX.yaml)
 IMAGES_LIST=()
 IMAGE_LIST_PATH=
 if [ ${FULL} -eq 0 ]; then
- IMAGE_LIST_PATH="images/images.txt"
+  IMAGE_LIST_PATH="images/images.txt"
 else
- IMAGE_LIST_PATH="images/images-full.txt"
+  IMAGE_LIST_PATH="images/images-full.txt"
 fi
 
 while IFS= read -r image; do
@@ -155,6 +162,7 @@ for devfile_url in ${DEVFILE_URL_LIST}; do
   sed -i 's/^/    /' ${TMP_DEVFILE}
 
   for image in "${IMAGES_LIST[@]}"; do
+    [[ ${DEBUG} -eq 1 && ${total_count} == 1 ]] && continue
     log -e "\n${BLUE}Begin testing ${devfile_url} with ${image}${NC}"
     ((total_count++))
     # Modify DevWorkspace template
@@ -189,7 +197,7 @@ for devfile_url in ${DEVFILE_URL_LIST}; do
       ((success_count++))
     else
       echo "TEST ${devfile_url} ${image} FAILED ❌"
-      failed_test+=("$devfile_url" "$image")
+      failed_test+=("Devfile '$devfile_url' using image '$image'")
     fi
     sleep 1s
   done # image loop
@@ -197,24 +205,28 @@ for devfile_url in ${DEVFILE_URL_LIST}; do
 done # devfile loop
 
 # cleanup
-echo -e "\n${BLUE}Cleaning up resources...${NC}"
-eval "oc delete dw ${DEVWORKSPACE_NAME} ${QUIET}"
-sleep 1s
+cleanup() {
+  echo -e "\n${BLUE}Cleaning up resources...${NC}"
+  eval "oc delete dw ${DEVWORKSPACE_NAME} ${QUIET}"
+  sleep 1s
 
-rm $TMP_DEVFILE
+  rm $TMP_DEVFILE
+}
+
+[[ ${DEBUG} -eq 0 ]] && cleanup
 
 echo    ""
 echo    "========================================="
 echo    "Summary:"
-echo -e "  Total images: ${BLUE}$total_count${NC} "
+echo -e "  Total tests: ${BLUE}$total_count${NC} "
 echo -e "  Successful: ${GREEN}$success_count${NC}"
-echo -e "  Failed: ${RED}${#failed_images[@]}${NC}"
+echo -e "  Failed: ${RED}${#failed_test[@]}${NC}"
 echo    "========================================="
 
-if [ ${#failed_images[@]} -gt 0 ]; then
+if [ ${#failed_test[@]} -gt 0 ]; then
   echo ""
   echo "Failed images:"
-  for img in "${failed_images[@]}"; do
+  for img in "${failed_test[@]}"; do
     echo "  - $img"
   done
   exit 1

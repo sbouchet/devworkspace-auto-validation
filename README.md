@@ -4,7 +4,7 @@
 
 ## Requirements
 
-* The command-line tools : `oc`, `yq`, `jq`
+* The command-line tools : `oc`, `jq`
 * You must be logged into the OpenShift cluster
 
 ### Usage
