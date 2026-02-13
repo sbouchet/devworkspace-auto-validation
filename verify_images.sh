@@ -16,7 +16,7 @@ while IFS= read -r image; do
     failed_images+=("$image")
     echo "  ❌ FAILED"
   fi
-done < images_to_test-full.txt
+done < images/images-full.txt
 
 echo ""
 echo "========================================="

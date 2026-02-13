@@ -1,3 +1,2 @@
-quay.io/devfile/universal-developer-image:ubi8-latest
 quay.io/devfile/universal-developer-image:ubi9-latest
 quay.io/devfile/universal-developer-image:ubi10-latest

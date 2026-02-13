@@ -1,5 +1,6 @@
 #! /bin/bash
 VERBOSE=0
+FULL=0
 
 # colors for fun
 RED='\033[1;91m'
@@ -130,13 +131,20 @@ TMP_DEVFILE=$(mktemp -t devfile-${SCENARIO}-XXX.yaml)
 
 # parsing images list
 IMAGES_LIST=()
+IMAGE_LIST_PATH=
+if [ ${FULL} -eq 0 ]; then
+ IMAGE_LIST_PATH="images/images.txt"
+else
+ IMAGE_LIST_PATH="images/images-full.txt"
+fi
+
 while IFS= read -r image; do
   # Skip empty lines
   [[ -z "$image" ]] && continue
 
   IMAGES_LIST+=("$image")
 
-done < images_to_test.txt
+done < ${IMAGE_LIST_PATH}
 
 failed_test=()
 success_count=0
@@ -146,7 +154,7 @@ for devfile_url in ${DEVFILE_URL_LIST}; do
   curl -sL -o ${TMP_DEVFILE} ${devfile_url}
   sed -i 's/^/    /' ${TMP_DEVFILE}
 
-  for image in ${IMAGES_LIST}; do
+  for image in "${IMAGES_LIST[@]}"; do
     log -e "\n${BLUE}Begin testing ${devfile_url} with ${image}${NC}"
     ((total_count++))
     # Modify DevWorkspace template
