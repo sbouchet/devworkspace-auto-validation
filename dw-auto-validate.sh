@@ -121,7 +121,8 @@ while true; do
   case $scenario in
     1 ) SCENARIO=sshd; break;;
     2 ) SCENARIO=jetbrains; break;;
-    3 ) SCENARIO=vscode; break;;
+    #3 ) SCENARIO=vscode; break;;
+    3 ) SCENARIO=vscode; echo "not supported right now"; exit 0;;
     * ) echo "Please answer 1 or 2 or 3";;
   esac
 done
@@ -135,6 +136,7 @@ echo -e "\n${BLUE}Running test scenario '${SCENARIO}' using ${DEVWORKSPACE_NAME}
 
 # Temporary storage for generated devfile
 TMP_DEVFILE=$(mktemp -t devfile-${SCENARIO}-XXX.yaml)
+TMP_DEVWORKSPACE=$(mktemp -t devworkspace-XXX.yaml)
 
 # parsing images list
 IMAGES_LIST=()
@@ -175,12 +177,13 @@ for devfile_url in ${DEVFILE_URL_LIST}; do
     -e "s|EDITOR_DEFINITION|${EDITOR_DEFINITION}|" \
     -e "s|PROJECT_URL|${PROJECT_URL}|" | \
     # Modify the result (must be separate)
-    eval "sed \"s|image: .*|image: ${image}|\" | oc apply -f - ${QUIET}"
+    eval "sed \"s|image: .*|image: ${image}|\" > ${TMP_DEVWORKSPACE}"
+    eval "oc apply -f ${TMP_DEVWORKSPACE} ${QUIET}"
     state=""
     log -n "Waiting for ${DEVWORKSPACE_NAME} .."
     count=0
     while [ "${state}" != "Running" ] && [ ${count} -lt ${TIMEOUT} ]; do
-      state=$(oc get dw ${DEVWORKSPACE_NAME}  -o 'jsonpath={.status.phase}')
+      state=$(oc get dw ${DEVWORKSPACE_NAME} -o 'jsonpath={.status.phase}')
       sleep 1s
       log -n "."
       count=$[${count}+1]
@@ -211,17 +214,18 @@ cleanup() {
   sleep 1s
 
   rm $TMP_DEVFILE
+  rm $TMP_DEVWORKSPACE
 }
 
 [[ ${DEBUG} -eq 0 ]] && cleanup
 
 echo    ""
-echo    "========================================="
+echo    "======================"
 echo    "Summary:"
 echo -e "  Total tests: ${BLUE}$total_count${NC} "
 echo -e "  Successful: ${GREEN}$success_count${NC}"
 echo -e "  Failed: ${RED}${#failed_test[@]}${NC}"
-echo    "========================================="
+echo    "======================"
 
 if [ ${#failed_test[@]} -gt 0 ]; then
   echo ""
