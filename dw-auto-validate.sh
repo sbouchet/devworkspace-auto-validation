@@ -42,7 +42,7 @@ while getopts "vfdh" o; do
 done
 
 # quiet logs from oc
-[[ ${VERBOSE} -eq 0 ]] && QUIET="> /dev/null 2>&1"
+[[ ${VERBOSE} -eq 0 ]] && QUIET="&>/dev/null"
 
 ####################
 # Common Functions #
@@ -157,7 +157,9 @@ done < ${IMAGE_LIST_PATH}
 
 failed_test=()
 success_count=0
-total_count=0  
+total_count=0
+
+log "Iterating over ${#DEVFILE_URL_LIST[@]} Devfiles and ${#IMAGES_LIST[@]} Images"
 
 for devfile_url in ${DEVFILE_URL_LIST}; do
   curl -sL -o ${TMP_DEVFILE} ${devfile_url}
