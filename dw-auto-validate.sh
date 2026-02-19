@@ -159,6 +159,9 @@ failed_test=()
 success_count=0
 total_count=0
 
+# Start timing
+START_TIME=$SECONDS
+
 log "Iterating over ${#DEVFILE_URL_LIST[@]} Devfiles and ${#IMAGES_LIST[@]} Images"
 
 for devfile_url in ${DEVFILE_URL_LIST}; do
@@ -221,12 +224,18 @@ cleanup() {
 
 [[ ${DEBUG} -eq 0 ]] && cleanup
 
+# Calculate elapsed time
+ELAPSED_TIME=$((SECONDS - START_TIME))
+ELAPSED_MIN=$((ELAPSED_TIME / 60))
+ELAPSED_SEC=$((ELAPSED_TIME % 60))
+
 echo    ""
 echo    "======================"
 echo    "Summary:"
 echo -e "  Total tests: ${BLUE}$total_count${NC} "
 echo -e "  Successful: ${GREEN}$success_count${NC}"
 echo -e "  Failed: ${RED}${#failed_test[@]}${NC}"
+echo -e "  Time elapsed: ${PURPLE}${ELAPSED_MIN}m ${ELAPSED_SEC}s${NC}"
 echo    "======================"
 
 if [ ${#failed_test[@]} -gt 0 ]; then

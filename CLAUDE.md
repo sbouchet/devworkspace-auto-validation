@@ -40,6 +40,7 @@ This is a bash-based automated validation tool for testing DevWorkspace instance
 3. **Settings Loading**: Sources the appropriate `settings/settings-<SCENARIO>.env` file
 4. **Test Matrix**: Iterates through devfiles × images, creating DevWorkspace instances and validating them
 5. **Cleanup**: Removes created resources (unless in debug mode)
+6. **Summary Report**: Displays total tests, success/failure counts, and elapsed time
 
 ### Scenarios
 
