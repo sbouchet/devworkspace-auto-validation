@@ -48,17 +48,6 @@ done
 # Common Functions #
 ####################
 
-getDevfileURLSFromRegistry() {
-  devfile_registry=$1
-
-  INDEX_PATH='/index/all'
-  devfileNames=$(curl -sL "${devfile_registry}${INDEX_PATH}" | jq -r '.[].name' -)
-
-  for name in ${devfileNames}; do
-    echo "${devfile_registry}/devfiles/${name}"
-  done
-}
-
 log() {
   if [ ${VERBOSE} -eq 1 ]; then
     echo ${@}
@@ -99,7 +88,8 @@ fi
 echo -e "\n${BLUE}Checking cluster connection...${NC}"
 log "Executing 'oc whoami'..."
 current_cluster=$(oc config current-context)
-if ! [ "$(oc whoami)" ]; then
+eval oc whoami ${QUIET}
+if [ $? -eq 1 ]; then
   echo -e "${YELLOW}Not connected.${NC} Do you want to login to current cluster? Current cluster is ${PURPLE}${current_cluster}.${NC}"
   while true; do
     read -p "(y/n)? : " yn
@@ -121,8 +111,7 @@ while true; do
   case $scenario in
     1 ) SCENARIO=sshd; break;;
     2 ) SCENARIO=jetbrains; break;;
-    #3 ) SCENARIO=vscode; break;;
-    3 ) SCENARIO=vscode; echo "not supported right now"; exit 0;;
+    3 ) SCENARIO=vscode; break;;
     * ) echo "Please answer 1 or 2 or 3";;
   esac
 done
