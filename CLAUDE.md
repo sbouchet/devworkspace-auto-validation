@@ -120,7 +120,7 @@ The two-stage approach ensures devfile content is injected before image replacem
 Tracks test execution time using bash's `$SECONDS` variable:
 - `START_TIME=$SECONDS` captured before test loop
 - `ELAPSED_TIME=$((SECONDS - START_TIME))` calculated after cleanup
-- Displayed as `${ELAPSED_MIN}m ${ELAPSED_SEC}s` in purple in summary
+- Displayed in purple in summary as `Xm Ys` or `Xh Ym Zs` when duration exceeds 1 hour
 
 ## File Structure
 

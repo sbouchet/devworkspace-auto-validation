@@ -215,8 +215,14 @@ cleanup() {
 
 # Calculate elapsed time
 ELAPSED_TIME=$((SECONDS - START_TIME))
-ELAPSED_MIN=$((ELAPSED_TIME / 60))
+ELAPSED_HOURS=$((ELAPSED_TIME / 3600))
+ELAPSED_MIN=$(((ELAPSED_TIME % 3600) / 60))
 ELAPSED_SEC=$((ELAPSED_TIME % 60))
+if [ ${ELAPSED_HOURS} -gt 0 ]; then
+  ELAPSED_DISPLAY="${ELAPSED_HOURS}h ${ELAPSED_MIN}m ${ELAPSED_SEC}s"
+else
+  ELAPSED_DISPLAY="${ELAPSED_MIN}m ${ELAPSED_SEC}s"
+fi
 
 echo    ""
 echo    "======================"
@@ -224,7 +230,7 @@ echo    "Summary:"
 echo -e "  Total tests: ${BLUE}$total_count${NC} "
 echo -e "  Successful: ${GREEN}$success_count${NC}"
 echo -e "  Failed: ${RED}${#failed_test[@]}${NC}"
-echo -e "  Time elapsed: ${PURPLE}${ELAPSED_MIN}m ${ELAPSED_SEC}s${NC}"
+echo -e "  Time elapsed: ${PURPLE}${ELAPSED_DISPLAY}${NC}"
 echo    "======================"
 
 if [ ${#failed_test[@]} -gt 0 ]; then
