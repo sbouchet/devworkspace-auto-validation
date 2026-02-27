@@ -60,6 +60,24 @@ debug() {
   fi
 }
 
+# Resolves the pod name and main container name for the current DevWorkspace.
+# Sets global variables: podName, mainContainerName
+# Returns 1 if pod or container cannot be found.
+resolve_devworkspace_pod() {
+  podNameAndDWName=$(oc get pods -o 'jsonpath={range .items[*]}{.metadata.name}{","}{.metadata.labels.controller\.devfile\.io/devworkspace_name}{end}')
+  debug "podNameAndDWName: ${podNameAndDWName}"
+  podName=$(echo ${podNameAndDWName} | grep ${DEVWORKSPACE_NAME} | cut -d, -f1)
+  debug "podName: ${podName}"
+  mainContainerName=$(oc get devworkspace ${DEVWORKSPACE_NAME} -o json | jq -r '[.spec.template.components[] | select(.container) | .name] | first')
+  debug "mainContainerName: ${mainContainerName}"
+  if [ -z "${podName}" ] || [ -z "${mainContainerName}" ]; then
+    log "Could not find pod/container matching ${DEVWORKSPACE_NAME}"
+    return 1
+  fi
+  log "Found ${mainContainerName} container in ${podName} pod"
+  return 0
+}
+
 ########
 # Main #
 ########
@@ -144,6 +162,23 @@ while IFS= read -r image; do
 
 done < ${IMAGE_LIST_PATH}
 
+# parsing devfiles list
+DEVFILE_URL_LIST=()
+DEVFILE_LIST_PATH=
+if [ ${FULL} -eq 0 ]; then
+  DEVFILE_LIST_PATH="devfiles/devfiles.txt"
+else
+  DEVFILE_LIST_PATH="devfiles/devfiles-full.txt"
+fi
+
+while IFS= read -r devfile; do
+  # Skip empty lines
+  [[ -z "$devfile" ]] && continue
+
+  DEVFILE_URL_LIST+=("$devfile")
+
+done < ${DEVFILE_LIST_PATH}
+
 failed_test=()
 success_count=0
 total_count=0
@@ -153,7 +188,7 @@ START_TIME=$SECONDS
 
 log "Iterating over ${#DEVFILE_URL_LIST[@]} Devfiles and ${#IMAGES_LIST[@]} Images"
 
-for devfile_url in ${DEVFILE_URL_LIST}; do
+for devfile_url in "${DEVFILE_URL_LIST[@]}"; do
   curl -sL -o ${TMP_DEVFILE} ${devfile_url}
   sed -i 's/^/    /' ${TMP_DEVFILE}
 
@@ -162,6 +197,13 @@ for devfile_url in ${DEVFILE_URL_LIST}; do
     log -e "\n${BLUE}Begin testing ${devfile_url} with ${image}${NC}"
     ((total_count++))
     # Modify DevWorkspace template
+    # Goal is to apply a devworkspace resource to the cluster, 
+    # with a replacement of the below placeholder in the template:
+    # DEVWORKSPACE_NAME -> the devworksapce name in the setting
+    # DEVWORKSPACE_NS -> the devworkspace namespace from current context
+    # DEVFILE -> one of the devfile url in a list
+    # PROJECT_URL -> one the project sample url in a list
+    # EDITOR_DEFINITION -> the editor definition url 
     cat devworkspace-template.yaml | \
     sed \
     -e "/DEVFILE/r ${TMP_DEVFILE}" \
@@ -171,6 +213,7 @@ for devfile_url in ${DEVFILE_URL_LIST}; do
     -e "s|EDITOR_DEFINITION|${EDITOR_DEFINITION}|" \
     -e "s|PROJECT_URL|${PROJECT_URL}|" | \
     # Modify the result (must be separate)
+    # here is the replacement of the container image used in the devfile from an image in the list
     eval "sed \"s|image: .*|image: ${image}|\" > ${TMP_DEVWORKSPACE}"
     eval "oc apply -f ${TMP_DEVWORKSPACE} ${QUIET}"
     state=""
@@ -190,10 +233,10 @@ for devfile_url in ${DEVFILE_URL_LIST}; do
     log "Validating ${DEVWORKSPACE_NAME} .."
     validate_devworkspace ${devfile_url}
     if [ $? -eq 0 ]; then
-      echo "TEST ${devfile_url} ${image} PASSED ✅"
+      echo "TEST ${devfile_url} with ${image} PASSED ✅"
       ((success_count++))
     else
-      echo "TEST ${devfile_url} ${image} FAILED ❌"
+      echo "TEST ${devfile_url} with ${image} FAILED ❌"
       failed_test+=("Devfile '$devfile_url' using image '$image'")
     fi
     sleep 1s
@@ -230,7 +273,7 @@ echo    "Summary:"
 echo -e "  Total tests: ${BLUE}$total_count${NC} "
 echo -e "  Successful: ${GREEN}$success_count${NC}"
 echo -e "  Failed: ${RED}${#failed_test[@]}${NC}"
-echo -e "  Time elapsed: ${PURPLE}${ELAPSED_DISPLAY}${NC}"
+echo -e "  Elapsed time: ${PURPLE}${ELAPSED_DISPLAY}${NC}"
 echo    "======================"
 
 if [ ${#failed_test[@]} -gt 0 ]; then

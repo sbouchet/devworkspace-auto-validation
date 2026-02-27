@@ -51,7 +51,7 @@ Automated validation tool for testing DevWorkspace instances on OpenShift cluste
 ### Command-Line Flags
 
 - `-v`: Verbose mode - enables `log()` output, shows detailed progress
-- `-f`: Full mode - uses `images/images-full.txt` instead of `images/images.txt`
+- `-f`: Full mode - uses `images/images-full.txt` and `devfiles/devfiles-full.txt` instead of their default counterparts
 - `-d`: Debug mode - enables verbose + debug output, runs only first test, skips cleanup
 - `-h`: Help - displays usage information
 
@@ -65,7 +65,6 @@ Each scenario in `settings/settings-<SCENARIO>.env` exports:
 - `DEVWORKSPACE_NAME`: Name for the DevWorkspace instance (e.g., 'sshd-test', 'jetbrains-idea-test', 'vscode-test')
 - `PROJECT_URL`: Git repository URL (must include surrounding double quotes)
 - `EDITOR_DEFINITION`: URL to the editor definition YAML
-- `DEVFILE_URL_LIST`: Space-separated list of devfile URLs to test
 - `validate_devworkspace()`: Function that validates the running DevWorkspace
 
 #### Scenario Validation Methods
@@ -134,9 +133,13 @@ images/
   images.txt              # Quick test list (3 UDI images: ubi8, ubi9, ubi10)
   images-full.txt         # Complete test matrix (UDI + base-developer-image variants)
 
+devfiles/
+  devfiles.txt            # Quick test list (nodejs devfile)
+  devfiles-full.txt       # Complete devfile list (32 devfiles from devfile registry)
+
 samples/
-  samples.txt             # Devfile URLs (currently unused)
-  samples-full.txt        # Extended devfile list (currently unused)
+  samples.txt             # Sample project URLs (currently unused)
+  samples-full.txt        # Extended sample project list (currently unused)
 
 devworkspace-template.yaml  # Base template with placeholders
 dw-auto-validate.sh        # Main validation orchestrator
@@ -214,7 +217,7 @@ mainContainerName=$(oc get devworkspace ${DEVWORKSPACE_NAME} -o 'jsonpath={.spec
 ### Adding a New Scenario
 
 1. Create `settings/settings-<name>.env`
-2. Export required variables: `TIMEOUT`, `DEVWORKSPACE_NAME`, `PROJECT_URL`, `EDITOR_DEFINITION`, `DEVFILE_URL_LIST`
+2. Export required variables: `TIMEOUT`, `DEVWORKSPACE_NAME`, `PROJECT_URL`, `EDITOR_DEFINITION`
 3. Implement `validate_devworkspace()` function that returns 0/1
 4. Update scenario selection in dw-auto-validate.sh:107-117 (add option, update prompts)
 
