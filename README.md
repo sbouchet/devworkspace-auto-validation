@@ -7,13 +7,13 @@ Automated validation tool for testing DevWorkspace instances on OpenShift cluste
 ### Running Tests
 
 ```bash
-# Basic validation (uses images/images.txt - 3 images)
+# Basic validation (uses small numbers of entries - 3 images, 5 devfiles)
 ./dw-auto-validate.sh
 
 # Verbose mode - shows detailed output
 ./dw-auto-validate.sh -v
 
-# Full test matrix (uses images/images-full.txt - all images, takes significant time)
+# Full test matrix (uses all entries from -full.txt files - all images, all devfiles. Takes significant time to complete!)
 ./dw-auto-validate.sh -f
 
 # Debug mode - verbose + runs only first test + no cleanup
@@ -32,7 +32,7 @@ Automated validation tool for testing DevWorkspace instances on OpenShift cluste
 
 ## Dependencies
 
-- `oc` - OpenShift CLI (must be logged into cluster)
+- `oc` - OpenShift CLI
 - `jq` - JSON processor
 - `curl` - HTTP client (for fetching devfiles)
 - `skopeo` - Container image inspector (for verify_images.sh only)
@@ -96,7 +96,7 @@ Uses `devworkspace-template.yaml` as base, performs sed substitutions in two sta
 ```bash
 cat devworkspace-template.yaml | sed \
   -e "/DEVFILE/r ${TMP_DEVFILE}" \    # Inject devfile content
-  -e '/DEVFILE/ d' \                   # Remove DEVFILE placeholder
+  -e '/DEVFILE/ d' \                  # Remove DEVFILE placeholder
   -e "s|DEVWORKSPACE_NAME|...|" \
   -e "s|DEVWORKSPACE_NS|...|" \
   -e "s|EDITOR_DEFINITION|...|" \
@@ -137,7 +137,7 @@ images/
   images-full.txt         # Complete test matrix (UDI + base-developer-image variants)
 
 devfiles/
-  devfiles.txt            # Quick test list (nodejs devfile)
+  devfiles.txt            # Quick test list (nodejs, go, python, php-laravel and java-quarkus devfile)
   devfiles-full.txt       # Complete devfile list (32 devfiles from devfile registry)
 
 samples/
