@@ -63,22 +63,16 @@ log() {
   fi
 }
 
-debug() {
-  if [ ${DEBUG} -eq 1 ]; then
-    echo ${@}
-  fi
-}
-
 # Resolves the pod name and main container name for the current DevWorkspace.
 # Sets global variables: podName, mainContainerName
 # Returns 1 if pod or container cannot be found.
 resolve_devworkspace_pod() {
   podNameAndDWName=$(oc get pods -o 'jsonpath={range .items[*]}{.metadata.name}{","}{.metadata.labels.controller\.devfile\.io/devworkspace_name}{end}')
-  debug "podNameAndDWName: ${podNameAndDWName}"
+  log "podNameAndDWName: ${podNameAndDWName}"
   podName=$(echo ${podNameAndDWName} | grep ${DEVWORKSPACE_NAME} | cut -d, -f1)
-  debug "podName: ${podName}"
+  log "podName: ${podName}"
   mainContainerName=$(oc get devworkspace ${DEVWORKSPACE_NAME} -o json | jq -r '[.spec.template.components[] | select(.container) | .name] | first')
-  debug "mainContainerName: ${mainContainerName}"
+  log "mainContainerName: ${mainContainerName}"
   if [ -z "${podName}" ] || [ -z "${mainContainerName}" ]; then
     log "Could not find pod/container matching ${DEVWORKSPACE_NAME}"
     return 1
@@ -151,7 +145,7 @@ fi
 DEVWORKSPACE_NS=$(oc project -q)
 echo -e "\n${BLUE}Running test scenario '${SCENARIO}' using ${DEVWORKSPACE_NAME} devworkspace in ${DEVWORKSPACE_NS} namespace...${NC}"
 
-# Temporary storage for generated devfile
+# Temporary storage for generated files
 TMP_DEVFILE=$(mktemp -t devfile-${SCENARIO}-XXX.yaml)
 TMP_DEVWORKSPACE=$(mktemp -t devworkspace-XXX.yaml)
 
@@ -264,7 +258,7 @@ cleanup() {
   rm $TMP_DEVWORKSPACE
 }
 
-[[ ${DEBUG} -eq 0 ]] && cleanup
+[[ ${DEBUG} -eq 0 ]] && cleanup || log -e "\n${YELLOW}Debug mode:${NC}\nDevworkspace (${DEVWORKSPACE_NAME}) not deleted\nTemporary devfile ($TMP_DEVFILE) not deleted\nTemporary devworkspace ($TMP_DEVWORKSPACE) not deleted."
 
 # Calculate elapsed time
 ELAPSED_TIME=$((SECONDS - START_TIME))
@@ -288,9 +282,9 @@ echo    "======================"
 
 if [ ${#failed_test[@]} -gt 0 ]; then
   echo ""
-  echo "Failed images:"
-  for img in "${failed_test[@]}"; do
-    echo "  - $img"
+  echo "Failed tests:"
+  for tst in "${failed_test[@]}"; do
+    echo "  - $tst"
   done
   exit 1
 fi
