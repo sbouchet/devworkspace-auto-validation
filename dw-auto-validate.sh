@@ -2,6 +2,7 @@
 VERBOSE=0
 FULL=0
 DEBUG=0
+SCENARIO=""
 
 # colors for fun
 RED='\033[1;91m'
@@ -16,9 +17,9 @@ NC='\033[0m' # No Color
 # Parameters for fun or experts #
 #################################
 
-while getopts "vfdh" o; do
+while getopts "vfdhs:" o; do
   case "${o}" in
-    v) 
+    v)
     VERBOSE=1
     echo "Using verbose mode."
     ;;
@@ -32,8 +33,16 @@ while getopts "vfdh" o; do
     VERBOSE=1
     echo -e "Using verbose mode AND do not clean resource. ${YELLOW}WARNING${NC} - This mode uses only the first item of the test matrix."
     ;;
+    s)
+    SCENARIO="${OPTARG}"
+    if [[ ! "${SCENARIO}" =~ ^(sshd|jetbrains|vscode)$ ]]; then
+      echo -e "${RED}Error:${NC} Invalid scenario '${SCENARIO}'. Valid options are: sshd, jetbrains, vscode." >&2
+      exit 1
+    fi
+    echo "Using scenario '${SCENARIO}'."
+    ;;
     h)
-    echo "Help: This script accepts -v for verbose mode, -d for debug mode and -f for full images test and -h for help."
+    echo "Help: This script accepts -v for verbose mode, -d for debug mode, -f for full images test, -s <scenario> to skip scenario choice (sshd|jetbrains|vscode) and -h for help."
     ;;
     \?)
     echo "Invalid option: -$OPTARG"
@@ -122,17 +131,18 @@ else
 fi
 
 # Choose scenario
-echo -e "${BLUE}Choose the dedicated scenario to run the validation test suite.${NC}\n1-sshd\n2-jetbrains\n3-vscode"
-SCENARIO=""
-while true; do
-  read -p "(1/2/3)? : " scenario
-  case $scenario in
-    1 ) SCENARIO=sshd; break;;
-    2 ) SCENARIO=jetbrains; break;;
-    3 ) SCENARIO=vscode; break;;
-    * ) echo "Please answer 1 or 2 or 3";;
-  esac
-done
+if [ -z "${SCENARIO}" ]; then
+  echo -e "${BLUE}Choose the dedicated scenario to run the validation test suite.${NC}\n1-sshd\n2-jetbrains\n3-vscode"
+  while true; do
+    read -p "(1/2/3)? : " scenario
+    case $scenario in
+      1 ) SCENARIO=sshd; break;;
+      2 ) SCENARIO=jetbrains; break;;
+      3 ) SCENARIO=vscode; break;;
+      * ) echo "Please answer 1 or 2 or 3";;
+    esac
+  done
+fi
 
 # Read values from scenario's setting
 . settings/settings-${SCENARIO}.env
