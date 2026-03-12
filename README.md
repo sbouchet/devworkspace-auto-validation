@@ -19,6 +19,9 @@ Automated validation tool for testing DevWorkspace instances on OpenShift cluste
 # Debug mode - verbose + runs only first test + no cleanup
 ./dw-auto-validate.sh -d
 
+# Skip interactive scenario choice (valid values: sshd, jetbrains, vscode)
+./dw-auto-validate.sh -s vscode
+
 # Help
 ./dw-auto-validate.sh -h
 ```
@@ -56,6 +59,7 @@ Automated validation tool for testing DevWorkspace instances on OpenShift cluste
 - `-v`: Verbose mode - enables `log()` output, shows detailed progress
 - `-f`: Full mode - uses `images/images-full.txt` and `devfiles/devfiles-full.txt` instead of their default counterparts
 - `-d`: Debug mode - enables verbose + debug output, runs only first test, skips cleanup
+- `-s <scenario>`: Skip interactive scenario prompt by specifying the scenario directly (`sshd`, `jetbrains`, or `vscode`)
 - `-h`: Help - displays usage information
 
 **Debug mode specifics**: Sets `DEBUG=1`, `FULL=0`, `VERBOSE=1`, runs only the first test iteration (`[[ ${DEBUG} -eq 1 && ${total_count} == 1 ]] && continue`), skips cleanup to allow resource inspection.
