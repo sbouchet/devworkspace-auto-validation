@@ -58,7 +58,7 @@ Automated validation tool for testing DevWorkspace instances on OpenShift cluste
 
 - `-v`: Verbose mode - enables `log()` output, shows detailed progress
 - `-f`: Full mode - uses `images/images-full.txt` and `devfiles/devfiles-full.txt` instead of their default counterparts
-- `-d`: Debug mode - enables verbose + debug output, runs only first test, skips cleanup
+- `-d`: Debug mode - enables verbose output, runs only first test, skips cleanup (shows skipped resources)
 - `-s <scenario>`: Skip interactive scenario prompt by specifying the scenario directly (`sshd`, `jetbrains`, or `vscode`)
 - `-h`: Help - displays usage information
 
@@ -117,7 +117,6 @@ The two-stage approach ensures devfile content is injected before image replacem
 ### Logging and Output Control
 
 - `log()`: Outputs only when `VERBOSE=1` (set by `-v` or `-d` flags)
-- `debug()`: Outputs only when `DEBUG=1` (set by `-d` flag)
 - `${QUIET}`: Set to `&>/dev/null` in non-verbose mode, empty string otherwise
   - Used with `eval` to conditionally suppress `oc` command output: `eval "oc apply -f ${TMP_DEVWORKSPACE} ${QUIET}"`
 

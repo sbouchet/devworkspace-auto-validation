@@ -3,6 +3,7 @@ VERBOSE=0
 FULL=0
 DEBUG=0
 SCENARIO=""
+PR_NUMBER=""
 
 # colors for fun
 RED='\033[1;91m'
@@ -17,7 +18,7 @@ NC='\033[0m' # No Color
 # Parameters for fun or experts #
 #################################
 
-while getopts "vfdhs:" o; do
+while getopts "vfdhs:p:" o; do
   case "${o}" in
     v)
     VERBOSE=1
@@ -41,8 +42,17 @@ while getopts "vfdhs:" o; do
     fi
     echo "Using scenario '${SCENARIO}'."
     ;;
+    p)
+    PR_NUMBER="${OPTARG}"
+    if [[ ! "${PR_NUMBER}" =~ ^[0-9]+$ ]]; then
+      echo -e "${RED}Error:${NC} PR number must be a positive integer." >&2
+      exit 1
+    fi
+    echo -e "Using che-code image from PR #${PR_NUMBER}."
+    ;;
     h)
-    echo "Help: This script accepts -v for verbose mode, -d for debug mode, -f for full images test, -s <scenario> to skip scenario choice (sshd|jetbrains|vscode) and -h for help."
+    echo "Help: This script accepts -v for verbose mode, -d for debug mode, -f for full images test, -s <scenario> to skip scenario choice (sshd|jetbrains|vscode), -p <PR_NUMBER> to test a che-code PR image (e.g. from che-incubator/che-code) and -h for help."
+    exit 0
     ;;
     \?)
     echo "Invalid option: -$OPTARG"
@@ -63,22 +73,16 @@ log() {
   fi
 }
 
-debug() {
-  if [ ${DEBUG} -eq 1 ]; then
-    echo ${@}
-  fi
-}
-
 # Resolves the pod name and main container name for the current DevWorkspace.
 # Sets global variables: podName, mainContainerName
 # Returns 1 if pod or container cannot be found.
 resolve_devworkspace_pod() {
   podNameAndDWName=$(oc get pods -o 'jsonpath={range .items[*]}{.metadata.name}{","}{.metadata.labels.controller\.devfile\.io/devworkspace_name}{end}')
-  debug "podNameAndDWName: ${podNameAndDWName}"
+  log "podNameAndDWName: ${podNameAndDWName}"
   podName=$(echo ${podNameAndDWName} | grep ${DEVWORKSPACE_NAME} | cut -d, -f1)
-  debug "podName: ${podName}"
+  log "podName: ${podName}"
   mainContainerName=$(oc get devworkspace ${DEVWORKSPACE_NAME} -o json | jq -r '[.spec.template.components[] | select(.container) | .name] | first')
-  debug "mainContainerName: ${mainContainerName}"
+  log "mainContainerName: ${mainContainerName}"
   if [ -z "${podName}" ] || [ -z "${mainContainerName}" ]; then
     log "Could not find pod/container matching ${DEVWORKSPACE_NAME}"
     return 1
@@ -111,6 +115,27 @@ else
   echo -e "${GREEN}Ok!${NC}"
 fi
 
+if [ -n "${PR_NUMBER}" ]; then
+  # Verify the PR image exists
+  PR_IMAGE="quay.io/che-incubator-pull-requests/che-code:pr-${PR_NUMBER}-amd64"
+  echo -e "\n${BLUE}Checking skopeo installation...${NC}"
+  log "Executing 'which skopeo'..."
+  if ! [ -x "$(command -v skopeo)" ]; then
+    echo -e "${RED}Error:${NC} skopeo is not installed. Please install skopeo package." >&2
+    exit 1
+  else
+    echo -e "${GREEN}Ok!${NC}"
+    echo -e "\n${BLUE}Checking PR image...${NC}"
+    log "Executing 'skopeo inspect'..."
+    eval skopeo inspect --no-tags --retry-times 2 "docker://${PR_IMAGE}" ${QUIET}
+    if [ $? -eq 1 ]; then
+      echo -e "${RED}Error:${NC} PR image '${PR_IMAGE}' not found. Make sure the GitHub Action has published the image." >&2
+      exit 1
+    fi
+    echo -e "${GREEN}Ok!${NC}"
+  fi
+fi
+
 # You must be logged into your OpenShift Cluster
 echo -e "\n${BLUE}Checking cluster connection...${NC}"
 log "Executing 'oc whoami'..."
@@ -127,12 +152,12 @@ if [ $? -eq 1 ]; then
     esac
   done
 else
-  echo -e "${GREEN}Ok!${NC}\nUsing current context ${PURPLE}${current_cluster}${NC}\n"
+  echo -e "${GREEN}Ok!${NC}\nUsing current context ${PURPLE}${current_cluster}${NC}"
 fi
 
 # Choose scenario
 if [ -z "${SCENARIO}" ]; then
-  echo -e "${BLUE}Choose the dedicated scenario to run the validation test suite.${NC}\n1-sshd\n2-jetbrains\n3-vscode"
+  echo -e "\n${BLUE}Choose the dedicated scenario to run the validation test suite.${NC}\n1-sshd\n2-jetbrains\n3-vscode"
   while true; do
     read -p "(1/2/3)? : " scenario
     case $scenario in
@@ -149,9 +174,43 @@ fi
 
 # user namespace where testing will occur
 DEVWORKSPACE_NS=$(oc project -q)
-echo -e "\n${BLUE}Running test scenario '${SCENARIO}' using ${DEVWORKSPACE_NAME} devworkspace in ${DEVWORKSPACE_NS} namespace...${NC}"
 
-# Temporary storage for generated devfile
+# PR image mode: override the editor definition with a PR image
+EDITOR_DWT_NAME=""
+if [ -n "${PR_NUMBER}" ]; then
+  PR_IMAGE="quay.io/che-incubator-pull-requests/che-code:pr-${PR_NUMBER}-amd64"
+  echo -e "\n${BLUE}Setting up editor definition from PR image: ${PR_IMAGE}${NC}"
+
+  # Download the default editor definition from settings and create a DevWorkspaceTemplate with the PR image
+  TMP_EDITOR_DEF=$(mktemp -t editor-def-XXX.yaml)
+  curl -sL -o "${TMP_EDITOR_DEF}" "${EDITOR_DEFINITION}"
+
+  # Replace the che-code image with the PR image (only the injector, not the runtime)
+  sed -i "s|image: quay.io/che-incubator/che-code:.*|image: ${PR_IMAGE}|" "${TMP_EDITOR_DEF}"
+
+  # Extract the spec content (everything after the metadata block: commands, events, components)
+  EDITOR_DWT_NAME="che-code-pr-${PR_NUMBER}"
+  TMP_DWT=$(mktemp -t editor-dwt-XXX.yaml)
+  cat > "${TMP_DWT}" <<DWTEOF
+apiVersion: workspace.devfile.io/v1alpha2
+kind: DevWorkspaceTemplate
+metadata:
+  name: ${EDITOR_DWT_NAME}
+  namespace: ${DEVWORKSPACE_NS}
+spec:
+$(sed -n '/^commands:/,$ p' "${TMP_EDITOR_DEF}" | sed 's/^/  /')
+DWTEOF
+
+  log "Applying DevWorkspaceTemplate ${EDITOR_DWT_NAME}..."
+  eval "oc apply -f ${TMP_DWT} ${QUIET}"
+  if [ $? -ne 0 ]; then
+    echo -e "${RED}Error:${NC} Failed to apply DevWorkspaceTemplate." >&2
+    exit 1
+  fi
+  echo -e "${GREEN}DevWorkspaceTemplate ${EDITOR_DWT_NAME} applied.${NC}"
+fi
+
+# Temporary storage for generated files
 TMP_DEVFILE=$(mktemp -t devfile-${SCENARIO}-XXX.yaml)
 TMP_DEVWORKSPACE=$(mktemp -t devworkspace-XXX.yaml)
 
@@ -189,6 +248,9 @@ while IFS= read -r devfile; do
 
 done < ${DEVFILE_LIST_PATH}
 
+#Run the tests now that everything is set up
+echo -e "\n${BLUE}Running test scenario '${SCENARIO}' using ${DEVWORKSPACE_NAME} devworkspace in ${DEVWORKSPACE_NS} namespace...${NC}"
+
 failed_test=()
 success_count=0
 total_count=0
@@ -196,15 +258,20 @@ total_count=0
 # Start timing
 START_TIME=$SECONDS
 
-log "Iterating over ${#DEVFILE_URL_LIST[@]} Devfiles and ${#IMAGES_LIST[@]} Images"
+if [ ${DEBUG} -eq 0 ]; then
+  log "Iterating over ${#DEVFILE_URL_LIST[@]} Devfiles and ${#IMAGES_LIST[@]} Images"
+else
+  log -e "${YELLOW}DEBUG MODE!${NC} Only first devfile and first image are used."
+fi
 
 for devfile_url in "${DEVFILE_URL_LIST[@]}"; do
   curl -sL -o ${TMP_DEVFILE} ${devfile_url}
   sed -i 's/^/    /' ${TMP_DEVFILE}
 
   for image in "${IMAGES_LIST[@]}"; do
+    #debug mode: stop after one iteration
     [[ ${DEBUG} -eq 1 && ${total_count} == 1 ]] && continue
-    log -e "\n${BLUE}Begin testing ${devfile_url} with ${image}${NC}"
+    log -e "\n${BLUE}Begin test of ${devfile_url} with ${image}${NC}"
     ((total_count++))
     # Modify DevWorkspace template
     # Goal is to apply a devworkspace resource to the cluster, 
@@ -214,13 +281,19 @@ for devfile_url in "${DEVFILE_URL_LIST[@]}"; do
     # DEVFILE -> one of the devfile url in a list
     # PROJECT_URL -> one the project sample url in a list
     # EDITOR_DEFINITION -> the editor definition url 
+    # When using PR mode, replace uri with kubernetes reference; otherwise use uri
+    if [ -n "${PR_NUMBER}" ]; then
+      EDITOR_SED_EXPR="s|uri: EDITOR_DEFINITION|kubernetes:\n        name: ${EDITOR_DWT_NAME}|"
+    else
+      EDITOR_SED_EXPR="s|EDITOR_DEFINITION|${EDITOR_DEFINITION}|"
+    fi
     cat devworkspace-template.yaml | \
     sed \
     -e "/DEVFILE/r ${TMP_DEVFILE}" \
     -e '/DEVFILE/ d' \
     -e "s|DEVWORKSPACE_NAME|${DEVWORKSPACE_NAME}|" \
     -e "s|DEVWORKSPACE_NS|${DEVWORKSPACE_NS}|" \
-    -e "s|EDITOR_DEFINITION|${EDITOR_DEFINITION}|" \
+    -e "${EDITOR_SED_EXPR}" \
     -e "s|PROJECT_URL|${PROJECT_URL}|" | \
     # Modify the result (must be separate)
     # here is the replacement of the container image used in the devfile from an image in the list
@@ -239,6 +312,9 @@ for devfile_url in "${DEVFILE_URL_LIST[@]}"; do
       log -e "\n${GREEN}${DEVWORKSPACE_NAME} is Running${NC}"
     else
       log -e "\n${YELLOW}${DEVWORKSPACE_NAME} failed to start${NC}"
+      echo "TEST ${devfile_url} with ${image} FAILED ❌"
+      failed_test+=("Devfile '$devfile_url' using image '$image'")
+      continue
     fi
     log "Validating ${DEVWORKSPACE_NAME} .."
     validate_devworkspace ${devfile_url}
@@ -258,13 +334,26 @@ done # devfile loop
 cleanup() {
   echo -e "\n${BLUE}Cleaning up resources...${NC}"
   eval "oc delete dw ${DEVWORKSPACE_NAME} ${QUIET}"
+  if [ -n "${PR_NUMBER}" ]; then
+    eval "oc delete devworkspacetemplate ${EDITOR_DWT_NAME} ${QUIET}"
+  fi
   sleep 1s
 
   rm $TMP_DEVFILE
   rm $TMP_DEVWORKSPACE
+  if [ -n "${PR_NUMBER}" ]; then
+    rm $TMP_EDITOR_DEF
+    rm $TMP_DWT
+  fi
 }
 
-[[ ${DEBUG} -eq 0 ]] && cleanup
+if [ ${DEBUG} -eq 0 ]; then
+  cleanup
+else
+  EXTRA_MSG=""
+  [ -n "${PR_NUMBER}" ] && EXTRA_MSG="\nTemporary editor definition file (${TMP_EDITOR_DEF}) not deleted\nTemporary devworkspace template file (${TMP_DWT}) not deleted\nRemote DevworkspaceTemplate (${EDITOR_DWT_NAME}) not deleted"
+  log -e "\n${YELLOW}Debug mode:${NC}\nRemote Devworkspace (${DEVWORKSPACE_NAME}) not deleted${DWT_MSG}\nTemporary devfile file ($TMP_DEVFILE) not deleted\nTemporary devworkspace file ($TMP_DEVWORKSPACE) not deleted${EXTRA_MSG}\nPlease delete remote workspaces if not needed anymore."
+fi
 
 # Calculate elapsed time
 ELAPSED_TIME=$((SECONDS - START_TIME))
@@ -288,9 +377,9 @@ echo    "======================"
 
 if [ ${#failed_test[@]} -gt 0 ]; then
   echo ""
-  echo "Failed images:"
-  for img in "${failed_test[@]}"; do
-    echo "  - $img"
+  echo "Failed tests:"
+  for tst in "${failed_test[@]}"; do
+    echo "  - $tst"
   done
   exit 1
 fi
